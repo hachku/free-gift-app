@@ -1,4 +1,4 @@
-# Free Gift App
+# Gift card checker
 
 This repository contains a ready-to-drop Shopify theme script that automatically adds a hidden tote (or any gift variant) to a shopper's cart once their subtotal reaches $150 CAD, and removes it if the subtotal falls below the threshold.
 
@@ -7,7 +7,7 @@ This repository contains a ready-to-drop Shopify theme script that automatically
    - Shopify always creates a default variant even when the product appears to have “no variants.” The script will automatically pick the first variant for you using the handle.
 2. In your theme, go to **Edit code → Assets → Add a new asset → Upload** and upload `gift-with-purchase.js`.
 3. Open the uploaded asset and **confirm `GIFT_PRODUCT_HANDLE`** matches your gift product handle. It is currently set to `MT-GWP` for your store; adjust it if your handle differs. If your threshold is not `$150 CAD`, adjust `THRESHOLD_CENTS` (e.g., `$120.00` → `12000`).
-4. Include the script wherever your cart updates occur (cart page and mini-cart).
+4. Include the script wherever your cart updates occur (cart page and mini-cart). The helper now also runs immediately on load and re-checks every 5 seconds to catch missed theme events. It also intercepts checkout buttons/links to run one last gift check before leaving the cart.
    - If you have `templates/cart.liquid`, add this near the bottom of that file:
      ```liquid
      {{ 'gift-with-purchase.js' | asset_url | script_tag }}
@@ -54,6 +54,7 @@ Think of the script as a little helper that watches your cart and drops a free t
      </script>
      ```
    - If your theme fires an event like `cart:updated` or `ajaxProduct:added`, also add `document.addEventListener('cart:updated', window.gwpEnsureGift);` once on page load. The helper already listens for those events, so adding the listeners once is enough.
+   - **Checkout buttons/links are automatically intercepted**: the helper will pause checkout clicks, sync the gift, and then continue to checkout. This covers fast “add then checkout” flows in a mini-cart/drawer.
 6. **Keep the tote hidden**
    - Make the tote **available to Online Store** (so Shopify can add it), but don’t link it anywhere: remove it from navigation, collections, and search, and leave it unpublished from other channels.
 7. **Test like a shopper**
@@ -68,7 +69,7 @@ Think of the script as a little helper that watches your cart and drops a free t
 ### Where to find the cart template (cart.liquid vs cart.json vs cart.js)
 - **`cart.liquid` and `cart.json` are the templates; `cart.js` is not.** If you only see `cart.js`, that is just a JS asset and not where you paste the Liquid script tag.
 - If you don’t see `cart.liquid`, open **Templates → cart.json** (common in Online Store 2.0). Inside that JSON file, note the section handles listed (e.g., `"main-cart-items"`, `"main-cart-footer"`). Open those **Sections** files (e.g., `sections/main-cart-items.liquid`) and drop the script tag there so it loads with the cart markup.
-- For mini-carts/drawers, look under **Sections** for files named `cart-drawer.liquid`, `cart-popup.liquid`, or similar, and add the script tag (plus the `window.gwpEnsureGift()` hook) where that drawer’s markup/scripts live.
+- For mini-carts/drawers, look under **Sections** for files named `cart-drawer.liquid`, `cart-popup.liquid`, or similar, and add the script tag (plus the `window.gwpEnsureGift()` hook) where that drawer’s markup/scripts live. The helper now self-checks every few seconds, but keeping the hook ensures instant updates.
 
 ### What is an “AJAX cart update”?
 - **Plain-English version:** when your theme changes the cart in the background without reloading the page—like a mini-cart “add to cart” button, a quantity stepper in a drawer, or a remove button that updates instantly.
@@ -107,7 +108,7 @@ fetch('/cart/update.js', {
 
 ### Quick troubleshooting (gift not showing up)
 - **Wrong handle**: verify the handle in `gift-with-purchase.js` matches the product URL (`.../products/<handle>`). The script will fetch `/products/<handle>.js` to resolve the first variant.
-- **Not available on Online Store**: the gift product must be available to the Online Store channel (even if you hide it from navigation/collections/search). Otherwise Shopify blocks adding it.
+- **Not available on Online Store**: the gift product must be available to the Online Store channel (even if you hide it from navigation/collections/search). Otherwise Shopify blocks adding it and the script will log a 404 when trying to resolve the handle.
 - **Theme events never fire**: if your theme doesn’t dispatch `cart:updated`/`ajaxProduct:added`, add a manual call after your AJAX cart code as shown above.
 - **Inventory**: ensure the gift variant is in stock, or allow “continue selling when out of stock.”
 - **Debug helper**: open your cart page/drawer, open DevTools Console, and run:

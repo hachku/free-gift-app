@@ -12,6 +12,7 @@
   const GIFT_PRODUCT_HANDLE = 'MT-GWP'; // Gift product handle configured for your store
   const THRESHOLD_CENTS = 15000; // $150.00 CAD in cents
   const GIFT_LINE_KEY_STORAGE = 'gwp:lastGiftKey';
+  const REFRESH_INTERVAL_MS = 5000; // Safety poll to catch missed events
 
   let inflight = false;
   let resolvedVariantId = null;
@@ -36,7 +37,9 @@
       return resolvedVariantId;
     }
 
-    throw new Error('[GWP] Could not find a variant for the provided product handle. Ensure the product has a variant.');
+    throw new Error(
+      '[GWP] Could not find a variant for the provided product handle. Ensure the product has a variant and is available to Online Store.',
+    );
   }
 
   function findGiftLine(cart, variantId) {
@@ -90,6 +93,45 @@
     }
   }
 
+  // Ensure the gift check runs before customers leave the cart by intercepting checkout
+  // buttons/links. This reduces the chance that a fast click on "Checkout" skips the
+  // add/remove logic when the mini-cart doesn't emit events.
+  function bindCheckoutInterceptors() {
+    const candidates = [
+      'form[action="/cart"] [name="checkout"]',
+      'form[action="/checkout"] [type="submit"]',
+      'button[name="checkout"]',
+      'a[href*="/checkout"]',
+    ];
+
+    const elements = document.querySelectorAll(candidates.join(','));
+    elements.forEach((el) => {
+      if (el.dataset.gwpCheckoutBound === 'true') return;
+      el.dataset.gwpCheckoutBound = 'true';
+
+      el.addEventListener('click', async (evt) => {
+        // Only intercept primary clicks/enter submits.
+        if (evt.defaultPrevented || (evt.type === 'click' && evt.button !== 0)) return;
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        try {
+          await ensureGiftState();
+        } finally {
+          // After syncing the gift, continue to checkout using the original intent.
+          const target = evt.currentTarget;
+          if (target.tagName === 'A' && target.href) {
+            window.location.href = target.href;
+          } else if (target.form) {
+            target.form.submit();
+          } else {
+            window.location.href = '/checkout';
+          }
+        }
+      });
+    });
+  }
+
   // Hook into common cart change triggers. You can also call window.gwpEnsureGift() manually
   // after your theme finishes an AJAX cart update.
   document.addEventListener('cart:refresh', ensureGiftState);
@@ -101,8 +143,15 @@
     }
   });
 
-  // Run on load to cover direct cart visits.
+  // Run on load to cover direct cart visits and poll as a safety net in case the theme
+  // doesn't emit expected events.
+  ensureGiftState();
   window.addEventListener('load', ensureGiftState);
+  window.addEventListener('load', bindCheckoutInterceptors);
+  setInterval(ensureGiftState, REFRESH_INTERVAL_MS);
+  // Re-bind checkout interceptors periodically in case the theme re-renders checkout buttons
+  // (common in AJAX mini-carts/drawers).
+  setInterval(bindCheckoutInterceptors, REFRESH_INTERVAL_MS);
   window.gwpEnsureGift = ensureGiftState; // Expose for manual calls if your theme emits different events.
 
   // Debug helper: run window.gwpDebugStatus() from the console to see current state and a one-off check
