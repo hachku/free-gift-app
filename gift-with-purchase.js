@@ -9,7 +9,7 @@
  * Upload this file as an asset and include it on your cart page + mini-cart.
  */
 (function () {
-  const GIFT_PRODUCT_HANDLE = 'your-gift-product-handle'; // TODO: replace with your gift product handle
+  const GIFT_PRODUCT_HANDLE = 'MT-GWP'; // Gift product handle configured for your store
   const THRESHOLD_CENTS = 15000; // $150.00 CAD in cents
   const GIFT_LINE_KEY_STORAGE = 'gwp:lastGiftKey';
 

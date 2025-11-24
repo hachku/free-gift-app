@@ -6,7 +6,7 @@ This repository contains a ready-to-drop Shopify theme script that automatically
 1. **Create the free gift product** in Shopify and note its **product handle** (the `.../products/<handle>` part of the URL).
    - Shopify always creates a default variant even when the product appears to have “no variants.” The script will automatically pick the first variant for you using the handle.
 2. In your theme, go to **Edit code → Assets → Add a new asset → Upload** and upload `gift-with-purchase.js`.
-3. Open the uploaded asset and **replace `GIFT_PRODUCT_HANDLE`** with your gift product handle. If your threshold is not `$150 CAD`, adjust `THRESHOLD_CENTS` (e.g., `$120.00` → `12000`).
+3. Open the uploaded asset and **confirm `GIFT_PRODUCT_HANDLE`** matches your gift product handle. It is currently set to `MT-GWP` for your store; adjust it if your handle differs. If your threshold is not `$150 CAD`, adjust `THRESHOLD_CENTS` (e.g., `$120.00` → `12000`).
 4. Include the script wherever your cart updates occur (cart page and mini-cart).
    - If you have `templates/cart.liquid`, add this near the bottom of that file:
      ```liquid
