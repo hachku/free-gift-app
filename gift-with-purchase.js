@@ -4,15 +4,12 @@
  * - Removes the gift if the cart drops below the threshold.
  * - Keeps only one gift even if customers add/remove items repeatedly.
  *
- * Replace GIFT_VARIANT_ID with the numeric variant ID of your hidden tote product.
- * If you only have the product handle (or think you have “no variants”), set
- *   GIFT_PRODUCT_HANDLE to the product's handle and leave GIFT_VARIANT_ID as null;
- *   Shopify will still have a default variant and the script will pick the first one.
+ * Set GIFT_PRODUCT_HANDLE to the handle of your hidden tote product.
+ * Shopify will fetch the product JSON and automatically pick its first variant.
  * Upload this file as an asset and include it on your cart page + mini-cart.
  */
 (function () {
-  const GIFT_VARIANT_ID = 11111111111111; // TODO: replace with your gift variant ID (or set to null if using handle)
-  const GIFT_PRODUCT_HANDLE = null; // Optional: set to product handle if you don't have the variant ID
+  const GIFT_PRODUCT_HANDLE = 'your-gift-product-handle'; // TODO: replace with your gift product handle
   const THRESHOLD_CENTS = 15000; // $150.00 CAD in cents
   const GIFT_LINE_KEY_STORAGE = 'gwp:lastGiftKey';
 
@@ -28,24 +25,18 @@
   async function getGiftVariantId() {
     if (resolvedVariantId) return resolvedVariantId;
 
-    // Direct variant ID provided
-    if (GIFT_VARIANT_ID && Number.isFinite(Number(GIFT_VARIANT_ID))) {
-      resolvedVariantId = Number(GIFT_VARIANT_ID);
+    if (!GIFT_PRODUCT_HANDLE) {
+      throw new Error('[GWP] No gift product handle configured. Set GIFT_PRODUCT_HANDLE to your gift product handle.');
+    }
+
+    const product = await fetchJSON(`/products/${GIFT_PRODUCT_HANDLE}.js`);
+    const firstVariant = product?.variants?.[0];
+    if (firstVariant?.id) {
+      resolvedVariantId = Number(firstVariant.id);
       return resolvedVariantId;
     }
 
-    // Fallback: product handle provided, fetch first variant
-    if (GIFT_PRODUCT_HANDLE) {
-      const product = await fetchJSON(`/products/${GIFT_PRODUCT_HANDLE}.js`);
-      const firstVariant = product?.variants?.[0];
-      if (firstVariant?.id) {
-        resolvedVariantId = Number(firstVariant.id);
-        return resolvedVariantId;
-      }
-      throw new Error('[GWP] Could not find a variant for the provided product handle.');
-    }
-
-    throw new Error('[GWP] No gift variant ID configured. Set GIFT_VARIANT_ID or GIFT_PRODUCT_HANDLE.');
+    throw new Error('[GWP] Could not find a variant for the provided product handle. Ensure the product has a variant.');
   }
 
   function findGiftLine(cart, variantId) {
@@ -118,7 +109,6 @@
   // without changing the cart.
   window.gwpDebugStatus = async function gwpDebugStatus() {
     console.info('[GWP] Debug: starting status check...');
-    console.info('[GWP] Configured variant ID:', GIFT_VARIANT_ID);
     console.info('[GWP] Configured product handle:', GIFT_PRODUCT_HANDLE || '(none)');
     console.info('[GWP] Threshold (cents):', THRESHOLD_CENTS);
 
@@ -136,7 +126,7 @@
 
       // Perform a dry-run ensure (no mutation if state already matches)
       await ensureGiftState();
-      console.info('[GWP] Debug run complete. If the gift still does not appear, confirm the variant ID comes from the variant URL (/variants/<id>) and that the gift is available to the Online Store channel.');
+      console.info('[GWP] Debug run complete. If the gift still does not appear, confirm the product handle is correct and that the gift is available to the Online Store channel.');
     } catch (err) {
       console.warn('[GWP] Debug failed:', err);
     }

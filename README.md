@@ -3,10 +3,10 @@
 This repository contains a ready-to-drop Shopify theme script that automatically adds a hidden tote (or any gift variant) to a shopper's cart once their subtotal reaches $150 CAD, and removes it if the subtotal falls below the threshold.
 
 ## Quick start (Shopify theme integration)
-1. **Create the free gift product/variant** in Shopify and copy its **numeric variant ID** (from the admin URL of the variant).
-   - Even if your product shows “no variants,” Shopify always creates one default variant. If you truly only know the **product handle**, you can set `GIFT_PRODUCT_HANDLE` instead and the script will grab the first variant for you.
+1. **Create the free gift product** in Shopify and note its **product handle** (the `.../products/<handle>` part of the URL).
+   - Shopify always creates a default variant even when the product appears to have “no variants.” The script will automatically pick the first variant for you using the handle.
 2. In your theme, go to **Edit code → Assets → Add a new asset → Upload** and upload `gift-with-purchase.js`.
-3. Open the uploaded asset and **replace `GIFT_VARIANT_ID`** with your variant ID. If you only know the product handle, set `GIFT_PRODUCT_HANDLE` instead and leave `GIFT_VARIANT_ID` as `null`. If your threshold is not `$150 CAD`, adjust `THRESHOLD_CENTS` (e.g., `$120.00` → `12000`).
+3. Open the uploaded asset and **replace `GIFT_PRODUCT_HANDLE`** with your gift product handle. If your threshold is not `$150 CAD`, adjust `THRESHOLD_CENTS` (e.g., `$120.00` → `12000`).
 4. Include the script wherever your cart updates occur (cart page and mini-cart).
    - If you have `templates/cart.liquid`, add this near the bottom of that file:
      ```liquid
@@ -20,17 +20,17 @@ This repository contains a ready-to-drop Shopify theme script that automatically
    - For a mini-cart/drawer, open the section that renders it (often `sections/cart-drawer.liquid`, `sections/header.liquid`, or similar) and add the same script tag there so it loads when the drawer opens.
    - Place the tag near your other scripts; the exact spot doesn’t matter as long as it’s inside the template/section that renders the cart or mini-cart. After any custom AJAX cart change, call `window.gwpEnsureGift()` so the gift check runs immediately.
    - **Do not change `asset_url` or `script_tag`.** Those are Liquid filters that convert the asset into a proper script tag. Only change the filename (`'gift-with-purchase.js'`) if you renamed the uploaded file.
-5. **Double-check the variant ID is truly a variant, not the product ID**: the admin URL should end with `/products/<product-handle>/variants/<long-number>`. Copy the long number **after `/variants/`**. If you only copied the product ID (shorter number at `/products/...`), Shopify will refuse the add call and the gift will never appear. If you can’t locate the variant URL, set `GIFT_PRODUCT_HANDLE` to the product’s handle and the script will pick its first variant.
+5. **Double-check the handle**: confirm `GIFT_PRODUCT_HANDLE` matches the gift product’s handle (the part after `/products/` in its URL). The script will fetch `/products/<handle>.js` and automatically use the first variant returned.
 6. **Keep the gift hidden from shoppers**: make it available to the **Online Store channel** (required so Shopify can add it) but remove it from navigation, collections, and search.
 6. Test end-to-end in an **incognito browser**: add products to reach `$150 CAD`, confirm the tote appears as a $0 line item, then remove items to drop below `$150` and verify the gift is removed.
-7. If the gift still does not appear, use the built-in debug helper `window.gwpDebugStatus()` from your browser console (on the cart page/drawer). It will print whether the cart meets the threshold, whether the configured variant ID is found, and any add/remove errors.
+7. If the gift still does not appear, use the built-in debug helper `window.gwpDebugStatus()` from your browser console (on the cart page/drawer). It will print whether the cart meets the threshold, whether the handle resolved to a variant, and any add/remove errors.
 
 ## ELI5: how to plug this into your store
 Think of the script as a little helper that watches your cart and drops a free tote in when the cart has enough money in it. Here’s how to make the helper work:
 
-1. **Give the helper the tote’s ID**
-   - In Shopify admin, open the tote **variant** and copy the long number in the URL (that’s the variant ID).
-   - Open `gift-with-purchase.js` and replace `GIFT_VARIANT_ID` with that number. Leave the rest alone unless you want a different spend amount.
+1. **Give the helper the tote’s handle**
+   - In Shopify admin, open the tote product and copy the **handle** (the text after `/products/` in the URL).
+   - Open `gift-with-purchase.js` and replace `GIFT_PRODUCT_HANDLE` with that handle. Leave the rest alone unless you want a different spend amount.
 2. **Tell the helper the spend amount (if not $150)**
    - In the same file, change `THRESHOLD_CENTS` if you want a different minimum. Example: `$120.00` becomes `12000`.
 3. **Put the helper in your theme**
@@ -106,7 +106,7 @@ fetch('/cart/update.js', {
 - **One call per change**: you don’t have to spam the helper—one call after the cart request resolves is enough, and the helper ignores duplicate inflight runs.
 
 ### Quick troubleshooting (gift not showing up)
-- **Wrong ID**: verify the ID in `gift-with-purchase.js` comes from the **variant URL** (`.../variants/<id>`), not the product URL (`.../products/<id>`). If you copied the product ID, the add-to-cart call silently fails.
+- **Wrong handle**: verify the handle in `gift-with-purchase.js` matches the product URL (`.../products/<handle>`). The script will fetch `/products/<handle>.js` to resolve the first variant.
 - **Not available on Online Store**: the gift product must be available to the Online Store channel (even if you hide it from navigation/collections/search). Otherwise Shopify blocks adding it.
 - **Theme events never fire**: if your theme doesn’t dispatch `cart:updated`/`ajaxProduct:added`, add a manual call after your AJAX cart code as shown above.
 - **Inventory**: ensure the gift variant is in stock, or allow “continue selling when out of stock.”
@@ -115,13 +115,13 @@ fetch('/cart/update.js', {
   window.gwpDebugStatus();
   ```
   You’ll see:
-  - the configured variant ID
+  - the configured product handle and resolved variant ID
   - the current cart subtotal and whether it meets the threshold
   - whether the gift is already in the cart and the stored line item key
   - the result of a simulated gift check (including any add/remove errors)
 
 ## Notes and limits
-- Works with one gift variant; if you need multiple gift options, extend the script to map thresholds to variant IDs.
+- Works with one gift variant; if you need multiple gift options, extend the script to map thresholds to product handles/variant IDs.
 - Requires the gift variant to be available to the Online Store sales channel so Shopify can add it, but you can keep it unlinked from navigation/collections.
 - Inventory is respected: if the gift is out of stock and you do **not** allow backorders, Shopify will refuse the add request.
 - No discounts are used; the gift line will be a $0 product. If you prefer a discounted price instead of free, set a non-zero price on the product and leave the rest of the script unchanged.
