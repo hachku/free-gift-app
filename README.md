@@ -4,6 +4,7 @@ This repository contains a ready-to-drop Shopify theme script that automatically
 
 ## Quick start (Shopify theme integration)
 1. **Create the free gift product** in Shopify and note its **product handle** (the `.../products/<handle>` part of the URL).
+   - Set the gift variant price to **$0.00** (or apply a **100% off automatic discount** for that product). The script cannot change prices—Shopify will charge the variant’s listed price if it isn’t already free.
    - Shopify always creates a default variant even when the product appears to have “no variants.” The script will automatically pick the first variant for you using the handle.
 2. In your theme, go to **Edit code → Assets → Add a new asset → Upload** and upload `gift-with-purchase.js`.
 3. Open the uploaded asset and **confirm `GIFT_PRODUCT_HANDLE`** matches your gift product handle. It is currently set to `MT-GWP` for your store; adjust it if your handle differs. If your threshold is not `$150 CAD`, adjust `THRESHOLD_CENTS` (e.g., `$120.00` → `12000`).
@@ -22,7 +23,7 @@ This repository contains a ready-to-drop Shopify theme script that automatically
    - **Do not change `asset_url` or `script_tag`.** Those are Liquid filters that convert the asset into a proper script tag. Only change the filename (`'gift-with-purchase.js'`) if you renamed the uploaded file.
 5. **Double-check the handle**: confirm `GIFT_PRODUCT_HANDLE` matches the gift product’s handle (the part after `/products/` in its URL). The script will fetch `/products/<handle>.js` and automatically use the first variant returned.
 6. **Keep the gift hidden from shoppers**: make it available to the **Online Store channel** (required so Shopify can add it) but remove it from navigation, collections, and search.
-6. Test end-to-end in an **incognito browser**: add products to reach `$150 CAD`, confirm the tote appears as a $0 line item, then remove items to drop below `$150` and verify the gift is removed.
+6. Test end-to-end in an **incognito browser**: add products to reach `$150 CAD`, confirm the tote appears as a **$0 line item** (or shows a 100% discount if you used one), then remove items to drop below `$150` and verify the gift is removed.
 7. If the gift still does not appear, use the built-in debug helper `window.gwpDebugStatus()` from your browser console (on the cart page/drawer). It will print whether the cart meets the threshold, whether the handle resolved to a variant, and any add/remove errors.
 
 ## ELI5: how to plug this into your store
@@ -30,6 +31,7 @@ Think of the script as a little helper that watches your cart and drops a free t
 
 1. **Give the helper the tote’s handle**
    - In Shopify admin, open the tote product and copy the **handle** (the text after `/products/` in the URL).
+   - In the same product, set the price to **$0.00** (or configure a **100% automatic discount** for that product) so customers are not charged at checkout.
    - Open `gift-with-purchase.js` and replace `GIFT_PRODUCT_HANDLE` with that handle. Leave the rest alone unless you want a different spend amount.
 2. **Tell the helper the spend amount (if not $150)**
    - In the same file, change `THRESHOLD_CENTS` if you want a different minimum. Example: `$120.00` becomes `12000`.
@@ -64,6 +66,7 @@ Think of the script as a little helper that watches your cart and drops a free t
 - The script polls the cart via Shopify's AJAX API (`/cart.js`).
 - When the cart subtotal is **≥ $150 CAD**, it adds the gift variant via `/cart/add.js` and stores the returned `line item key` in `sessionStorage`.
 - If the subtotal drops **below $150**, it removes that line item via `/cart/update.js`.
+- It keeps **exactly one gift** in the cart: if customers duplicate the gift or raise its quantity, the script normalizes back to a single gift with quantity `1`.
 - It listens for common cart change events (`cart:refresh`, form changes) and also runs once on page load. You can manually trigger a re-check with `window.gwpEnsureGift()` after any custom AJAX cart update.
 
 ### Where to find the cart template (cart.liquid vs cart.json vs cart.js)
@@ -125,4 +128,4 @@ fetch('/cart/update.js', {
 - Works with one gift variant; if you need multiple gift options, extend the script to map thresholds to product handles/variant IDs.
 - Requires the gift variant to be available to the Online Store sales channel so Shopify can add it, but you can keep it unlinked from navigation/collections.
 - Inventory is respected: if the gift is out of stock and you do **not** allow backorders, Shopify will refuse the add request.
-- No discounts are used; the gift line will be a $0 product. If you prefer a discounted price instead of free, set a non-zero price on the product and leave the rest of the script unchanged.
+- The script **cannot change prices**. To ensure the gift is free, set the variant price to $0 or apply a **100% off automatic discount** targeting the gift product. If the price stays above $0, Shopify will charge it at checkout even though it was auto-added.

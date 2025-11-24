@@ -16,6 +16,7 @@
 
   let inflight = false;
   let resolvedVariantId = null;
+  let resolvedVariantPrice = null;
 
   async function fetchJSON(url, options = {}) {
     const res = await fetch(url, options);
@@ -34,6 +35,7 @@
     const firstVariant = product?.variants?.[0];
     if (firstVariant?.id) {
       resolvedVariantId = Number(firstVariant.id);
+      resolvedVariantPrice = Number(firstVariant.price ?? 0);
       return resolvedVariantId;
     }
 
@@ -42,8 +44,8 @@
     );
   }
 
-  function findGiftLine(cart, variantId) {
-    return cart.items.find((item) => item.id === variantId) || null;
+  function findGiftLines(cart, variantId) {
+    return cart.items.filter((item) => item.id === variantId);
   }
 
   async function addGift(variantId) {
@@ -54,23 +56,23 @@
     });
   }
 
-  async function removeGift(lineKey) {
-    const updates = { [lineKey]: 0 };
-    return fetchJSON('/cart/update.js', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updates }),
-    });
-  }
-
   async function ensureGiftState() {
     if (inflight) return;
     inflight = true;
     try {
       const variantId = await getGiftVariantId();
+      if (resolvedVariantPrice > 0) {
+        if (!sessionStorage.getItem('gwp:priceWarned')) {
+          console.warn(
+            '[GWP] The gift variant price is not $0. Shopify will charge customers unless you set the gift variant price to $0 or use a 100% off automatic discount for this product.',
+          );
+          sessionStorage.setItem('gwp:priceWarned', '1');
+        }
+      }
       const cart = await fetchJSON('/cart.js');
-      const giftLine = findGiftLine(cart, variantId);
-      const hasGift = Boolean(giftLine);
+      const giftLines = findGiftLines(cart, variantId);
+      const giftLine = giftLines[0] || null;
+      const hasGift = giftLines.length > 0;
       const meetsThreshold = cart.items_subtotal_price >= THRESHOLD_CENTS;
 
       if (meetsThreshold && !hasGift) {
@@ -79,12 +81,35 @@
         if (addResp && addResp.key) {
           sessionStorage.setItem(GIFT_LINE_KEY_STORAGE, addResp.key);
         }
-      } else if (!meetsThreshold && hasGift) {
-        const lineKey = giftLine.key || sessionStorage.getItem(GIFT_LINE_KEY_STORAGE);
-        if (lineKey) {
-          await removeGift(lineKey);
-          sessionStorage.removeItem(GIFT_LINE_KEY_STORAGE);
+      } else if (meetsThreshold && hasGift) {
+        // Normalize to exactly one gift with quantity 1.
+        const updates = {};
+        giftLines.forEach((line, index) => {
+          if (index === 0) {
+            if (line.quantity !== 1) updates[line.key] = 1;
+            sessionStorage.setItem(GIFT_LINE_KEY_STORAGE, line.key);
+          } else {
+            updates[line.key] = 0;
+          }
+        });
+        if (Object.keys(updates).length > 0) {
+          await fetchJSON('/cart/update.js', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates }),
+          });
         }
+      } else if (!meetsThreshold && hasGift) {
+        const updates = {};
+        giftLines.forEach((line) => {
+          updates[line.key] = 0;
+        });
+        await fetchJSON('/cart/update.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates }),
+        });
+        sessionStorage.removeItem(GIFT_LINE_KEY_STORAGE);
       }
     } catch (err) {
       console.warn('[GWP] Gift check failed:', err);
@@ -164,13 +189,15 @@
     try {
       const variantId = await getGiftVariantId();
       const cart = await fetchJSON('/cart.js');
-      const giftLine = findGiftLine(cart, variantId);
+      const giftLines = findGiftLines(cart, variantId);
+      const giftLine = giftLines[0] || null;
       const meetsThreshold = cart.items_subtotal_price >= THRESHOLD_CENTS;
       const storedKey = sessionStorage.getItem(GIFT_LINE_KEY_STORAGE);
 
       console.info('[GWP] Resolved variant ID in use:', variantId);
+      console.info('[GWP] Resolved variant price (cents):', resolvedVariantPrice);
       console.info('[GWP] Cart subtotal (cents):', cart.items_subtotal_price, 'Meets threshold?', meetsThreshold);
-      console.info('[GWP] Gift present in cart?', Boolean(giftLine), giftLine ? `line key: ${giftLine.key}` : '');
+      console.info('[GWP] Gift present in cart?', Boolean(giftLine), giftLine ? `line key: ${giftLine.key}, qty: ${giftLine.quantity}` : '');
       console.info('[GWP] Stored line key:', storedKey || '(none)');
 
       // Perform a dry-run ensure (no mutation if state already matches)
