@@ -1,4 +1,4 @@
-# Gift card checker
+# Free Gift App
 
 This repository contains a ready-to-drop Shopify theme script that automatically adds a hidden tote (or any gift variant) to a shopper's cart once their subtotal reaches $150 CAD, and removes it if the subtotal falls below the threshold.
 
